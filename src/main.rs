@@ -1,4 +1,3 @@
-mod downloader;
 mod loader;
 mod models;
 mod pipeline;
@@ -60,8 +59,6 @@ fn run_dataset_builder_mode() {
         years: vec![2025],
         subjects: vec!["財務・会計".to_string()],
         output_path: PathBuf::from(QUESTIONS_PATH),
-        raw_download_dir: PathBuf::from("data/raw"),
-        source_url_template: Some("https://example.com/{year}/{subject}.pdf".to_string()),
         force: false,
         dry_run: true,
     };
