@@ -109,9 +109,10 @@ fn build_download_targets(config: &PipelineConfig) -> Result<Vec<DownloadTarget>
             let slug = slugify(subject);
             let file_name = format!("{}_{}.pdf", year, slug);
             let output_path = config.raw_download_dir.join(file_name);
+            let encoded_subject = encode_url_component(&slug);
             let url = template
                 .replace("{year}", &year.to_string())
-                .replace("{subject}", &slug);
+                .replace("{subject}", &encoded_subject);
 
             targets.push(DownloadTarget {
                 year: *year,
@@ -194,31 +195,40 @@ fn parse_stem(stem: &str) -> Result<(u32, String), String> {
 }
 
 fn slugify(subject: &str) -> String {
-    let trimmed = subject.trim().to_lowercase();
-    if trimmed.is_empty() {
-        return "unknown".to_string();
+    let mut out = String::new();
+    let mut prev_sep = false;
+
+    for c in subject.trim().chars() {
+        if c.is_alphanumeric() {
+            out.extend(c.to_lowercase());
+            prev_sep = false;
+        } else if !prev_sep {
+            out.push('_');
+            prev_sep = true;
+        }
     }
 
-    let ascii_like = trimmed
-        .chars()
-        .map(|c| match c {
-            'a'..='z' | '0'..='9' => c,
-            'ァ'..='ヶ' | 'ぁ'..='ゖ' | '一'..='龥' => '_',
-            _ => '_',
-        })
-        .collect::<String>();
-
-    let compact = ascii_like
-        .split('_')
-        .filter(|s| !s.is_empty())
-        .collect::<Vec<_>>()
-        .join("_");
-
-    if compact.is_empty() {
+    let trimmed = out.trim_matches('_').to_string();
+    if trimmed.is_empty() {
         "unknown".to_string()
     } else {
-        compact
+        trimmed
     }
+}
+
+fn encode_url_component(input: &str) -> String {
+    let mut encoded = String::with_capacity(input.len());
+
+    for b in input.as_bytes() {
+        match *b {
+            b'A'..=b'Z' | b'a'..=b'z' | b'0'..=b'9' | b'-' | b'_' | b'.' | b'~' => {
+                encoded.push(*b as char)
+            }
+            _ => encoded.push_str(&format!("%{:02X}", b)),
+        }
+    }
+
+    encoded
 }
 
 #[cfg(test)]
@@ -291,6 +301,21 @@ mod tests {
         );
     }
 
+    #[test]
+    fn slugify_keeps_non_ascii_distinct() {
+        let a = slugify("財務・会計");
+        let b = slugify("企業経営理論");
+        assert_ne!(a, "unknown");
+        assert_ne!(b, "unknown");
+        assert_ne!(a, b);
+    }
+
+    #[test]
+    fn url_component_is_percent_encoded() {
+        let encoded = encode_url_component("財務_会計");
+        assert!(encoded.contains("%E8%B2%A1"));
+        assert!(encoded.contains("_"));
+    }
     #[test]
     fn parse_stem_works() {
         let (year, subject) = parse_stem("2025_zaimu_kaikei").expect("should parse");
