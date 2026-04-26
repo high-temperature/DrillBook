@@ -1,10 +1,13 @@
 mod loader;
 mod models;
+mod pipeline;
 mod quiz;
 
 use std::io::{self, Write};
+use std::path::PathBuf;
 
 use loader::load_questions;
+use pipeline::{PipelineConfig, run_ingest};
 use quiz::run_quiz;
 
 const QUESTIONS_PATH: &str = "data/questions.json";
@@ -52,7 +55,26 @@ fn run_quiz_mode() {
 }
 
 fn run_dataset_builder_mode() {
-    println!("この機能は現在実装中です。次のタスクで追加します。");
+    let config = PipelineConfig {
+        years: vec![2025],
+        subjects: vec!["財務・会計".to_string()],
+        output_path: PathBuf::from(QUESTIONS_PATH),
+        force: false,
+        dry_run: true,
+    };
+
+    match run_ingest(&config) {
+        Ok(summary) => {
+            println!("パイプライン完了サマリー:");
+            println!("  ダウンロード件数: {}", summary.downloaded_files);
+            println!("  OCR出力件数: {}", summary.ocr_outputs);
+            println!("  パース済み問題数: {}", summary.parsed_questions);
+            println!("  失敗件数: {}", summary.failed_targets);
+        }
+        Err(e) => {
+            eprintln!("パイプライン実行に失敗しました: {}", e);
+        }
+    }
 }
 
 fn main() {
