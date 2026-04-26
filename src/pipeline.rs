@@ -26,6 +26,12 @@ pub struct PipelineSummary {
     pub failed_targets: usize,
 }
 
+#[derive(Debug)]
+struct ParseOcrResult {
+    questions: Vec<Question>,
+    file_count: usize,
+}
+
 pub fn run_ingest(config: &PipelineConfig) -> Result<PipelineSummary, String> {
     validate_config(config)?;
 
@@ -61,14 +67,14 @@ pub fn run_ingest(config: &PipelineConfig) -> Result<PipelineSummary, String> {
             .output_path
             .to_str()
             .ok_or_else(|| "output_path をUTF-8文字列に変換できませんでした。".to_string())?,
-        &parsed,
+        &parsed.questions,
     )
     .map_err(|e| format!("JSON出力に失敗しました: {}", e))?;
 
     Ok(PipelineSummary {
         downloaded_files: downloaded.len(),
-        ocr_outputs: parsed.len(),
-        parsed_questions: parsed.len(),
+        ocr_outputs: parsed.file_count,
+        parsed_questions: parsed.questions.len(),
         failed_targets: 0,
     })
 }
@@ -119,7 +125,7 @@ fn build_download_targets(config: &PipelineConfig) -> Result<Vec<DownloadTarget>
     Ok(targets)
 }
 
-fn parse_ocr_directory(config: &PipelineConfig) -> Result<Vec<Question>, String> {
+fn parse_ocr_directory(config: &PipelineConfig) -> Result<ParseOcrResult, String> {
     if !config.ocr_text_dir.exists() {
         return Err(format!(
             "OCR入力ディレクトリが存在しません: {}",
@@ -131,6 +137,7 @@ fn parse_ocr_directory(config: &PipelineConfig) -> Result<Vec<Question>, String>
         .map_err(|e| format!("OCR入力ディレクトリを読めません: {}", e))?;
 
     let mut all_questions = Vec::new();
+    let mut file_count = 0usize;
 
     for entry in entries {
         let entry = entry.map_err(|e| format!("OCR入力の列挙に失敗しました: {}", e))?;
@@ -139,6 +146,8 @@ fn parse_ocr_directory(config: &PipelineConfig) -> Result<Vec<Question>, String>
         if path.extension().and_then(|s| s.to_str()) != Some("txt") {
             continue;
         }
+
+        file_count += 1;
 
         let stem = path
             .file_stem()
@@ -154,11 +163,18 @@ fn parse_ocr_directory(config: &PipelineConfig) -> Result<Vec<Question>, String>
         all_questions.append(&mut parsed);
     }
 
+    if file_count == 0 {
+        return Err("OCRテキスト(.txt)が見つかりませんでした。".to_string());
+    }
+
     if all_questions.is_empty() {
         return Err("OCRテキストから問題を1件も抽出できませんでした。".to_string());
     }
 
-    Ok(all_questions)
+    Ok(ParseOcrResult {
+        questions: all_questions,
+        file_count,
+    })
 }
 
 fn parse_stem(stem: &str) -> Result<(u32, String), String> {

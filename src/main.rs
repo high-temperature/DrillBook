@@ -25,7 +25,7 @@ fn prompt_mode() -> Option<AppMode> {
     println!("==============================");
     println!("DrillBook 起動メニュー");
     println!("1. 既存JSONでクイズ開始");
-    println!("2. 過去問を取得して問題集JSONを生成（準備中）");
+    println!("2. 過去問を取得して問題集JSONを生成");
     println!("0. 終了");
     println!("==============================");
 
